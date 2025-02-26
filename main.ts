@@ -1,17 +1,44 @@
-import { MarkdownRenderer, MarkdownView, Notice, Plugin } from "obsidian";
+import {
+  App,
+  MarkdownRenderer,
+  MarkdownView,
+  Notice,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+} from "obsidian";
 import { clipboard } from "electron";
 
 export default class TipsyExportPlugin extends Plugin {
+  settings: TipsyExportPluginSettings;
+
   async onload() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.addSettingTab(new TipsyExportPluginSettingTab(this.app, this));
+
     this.addCommand({
       id: "tipsy-export-html",
       name: "Export Note as HTML",
       callback: () => this.copyAsHtml(),
     });
+
+    this.addCommand({
+      id: "tipsy-export-rich-text",
+      name: "Export Note as Rich Text",
+      callback: () => this.copyAsRichText(),
+    });
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
   }
 
   private async copyAsHtml() {
     await this.copy("HTML", clipboard.writeText);
+  }
+
+  private async copyAsRichText() {
+    await this.copy("Rich Text", clipboard.writeHTML);
   }
 
   private async copy(label: string, copy: (html: string) => void) {
@@ -51,163 +78,54 @@ export default class TipsyExportPlugin extends Plugin {
       activeView,
     );
 
+    this.adjustRenderedHtml(wrapper);
     const html = wrapper.innerHTML.trim();
 
     document.body.removeChild(wrapper);
 
     return html;
   }
+
+  private adjustRenderedHtml(wrapper: HTMLDivElement) {
+    // 1. Detatch frontmatter.
+    wrapper.find(".frontmatter")?.detach();
+
+    // <p><br></p><p align="center">──── ❁ ────</p><p><br></p>
+    // 2. Replace divider if custom variant exists.
+    if (this.settings.divider) {
+      for (const hr of wrapper.findAll("hr")) {
+        hr.outerHTML = this.settings.divider;
+      }
+    }
+  }
 }
 
-// import {
-//   App,
-//   Editor,
-//   MarkdownView,
-//   Modal,
-//   Notice,
-//   Plugin,
-//   PluginSettingTab,
-//   Setting,
-// } from "obsidian";
+interface TipsyExportPluginSettings {
+  divider: string;
+}
 
-// // Remember to rename these classes and interfaces!
+const DEFAULT_SETTINGS: TipsyExportPluginSettings = {
+  divider: "",
+};
 
-// interface MyPluginSettings {
-//   mySetting: string;
-// }
+class TipsyExportPluginSettingTab extends PluginSettingTab {
+  constructor(app: App, readonly plugin: TipsyExportPlugin) {
+    super(app, plugin);
+  }
 
-// const DEFAULT_SETTINGS: MyPluginSettings = {
-//   mySetting: "default",
-// };
+  display() {
+    this.containerEl.empty();
 
-// export default class MyPlugin extends Plugin {
-//   settings: MyPluginSettings;
-
-//   async onload() {
-//     await this.loadSettings();
-
-//     // This creates an icon in the left ribbon.
-//     const ribbonIconEl = this.addRibbonIcon(
-//       "dice",
-//       "Sample Plugin",
-//       (evt: MouseEvent) => {
-//         // Called when the user clicks the icon.
-//         new Notice("This is a notice!");
-//       },
-//     );
-//     // Perform additional things with the ribbon
-//     ribbonIconEl.addClass("my-plugin-ribbon-class");
-
-//     // This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-//     const statusBarItemEl = this.addStatusBarItem();
-//     statusBarItemEl.setText("Status Bar Text");
-
-//     // This adds a simple command that can be triggered anywhere
-//     this.addCommand({
-//       id: "open-sample-modal-simple",
-//       name: "Open sample modal (simple)",
-//       callback: () => {
-//         new SampleModal(this.app).open();
-//       },
-//     });
-//     // This adds an editor command that can perform some operation on the current editor instance
-//     this.addCommand({
-//       id: "sample-editor-command",
-//       name: "Sample editor command",
-//       editorCallback: (editor: Editor, view: MarkdownView) => {
-//         console.log(editor.getSelection());
-//         editor.replaceSelection("Sample Editor Command");
-//       },
-//     });
-//     // This adds a complex command that can check whether the current state of the app allows execution of the command
-//     this.addCommand({
-//       id: "open-sample-modal-complex",
-//       name: "Open sample modal (complex)",
-//       checkCallback: (checking: boolean) => {
-//         // Conditions to check
-//         const markdownView = this.app.workspace.getActiveViewOfType(
-//           MarkdownView,
-//         );
-//         if (markdownView) {
-//           // If checking is true, we're simply "checking" if the command can be run.
-//           // If checking is false, then we want to actually perform the operation.
-//           if (!checking) {
-//             new SampleModal(this.app).open();
-//           }
-
-//           // This command will only show up in Command Palette when the check function returns true
-//           return true;
-//         }
-//       },
-//     });
-
-//     // This adds a settings tab so the user can configure various aspects of the plugin
-//     this.addSettingTab(new SampleSettingTab(this.app, this));
-
-//     // If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-//     // Using this function will automatically remove the event listener when this plugin is disabled.
-//     this.registerDomEvent(document, "click", (evt: MouseEvent) => {
-//       console.log("click", evt);
-//     });
-
-//     // When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-//     this.registerInterval(
-//       window.setInterval(() => console.log("setInterval"), 5 * 60 * 1000),
-//     );
-//   }
-
-//   onunload() {
-//   }
-
-//   async loadSettings() {
-//     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-//   }
-
-//   async saveSettings() {
-//     await this.saveData(this.settings);
-//   }
-// }
-
-// class SampleModal extends Modal {
-//   constructor(app: App) {
-//     super(app);
-//   }
-
-//   onOpen() {
-//     const { contentEl } = this;
-//     contentEl.setText("Woah!");
-//   }
-
-//   onClose() {
-//     const { contentEl } = this;
-//     contentEl.empty();
-//   }
-// }
-
-// class SampleSettingTab extends PluginSettingTab {
-//   plugin: MyPlugin;
-
-//   constructor(app: App, plugin: MyPlugin) {
-//     super(app, plugin);
-//     this.plugin = plugin;
-//   }
-
-//   display(): void {
-//     const { containerEl } = this;
-
-//     containerEl.empty();
-
-//     new Setting(containerEl)
-//       .setName("Setting #1")
-//       .setDesc("It's a secret")
-//       .addText((text) =>
-//         text
-//           .setPlaceholder("Enter your secret")
-//           .setValue(this.plugin.settings.mySetting)
-//           .onChange(async (value) => {
-//             this.plugin.settings.mySetting = value;
-//             await this.plugin.saveSettings();
-//           })
-//       );
-//   }
-// }
+    new Setting(this.containerEl)
+      .setName("Custom Divider")
+      .setDesc("Will replace hr tags if set.")
+      .addText((text) => {
+        text
+          .setValue(this.plugin.settings.divider)
+          .onChange(async (value) => {
+            this.plugin.settings.divider = value;
+            await this.plugin.saveSettings();
+          });
+      });
+  }
+}
